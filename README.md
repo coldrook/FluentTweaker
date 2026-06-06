@@ -3,7 +3,6 @@ _no mystery buttons, no “ultimate FPS boost”, no registry roulette_
 
 <img width="859" height="627" alt="image" src="https://github.com/user-attachments/assets/b885d7ad-1bfd-4e52-a21c-6ce3729678f8" />
 
-
 FluentTweaker is basically the sibling project to FluentCleaner,except instead of cleaning files, this one focuses on tweaking Windows itself
 
 UI, taskbar, privacy, AI features, Explorer behavior, gaming tweaks, performance settings, hidden policies, system behavior...all the stuff power users usually end up changing manually through obscure registry edits, group policies or random forum posts from 2012.
