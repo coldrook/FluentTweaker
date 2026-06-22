@@ -1,0 +1,101 @@
+name: Build portable FluentTweaker
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Source ref to build from builtbybel/FluentTweaker"
+        required: true
+        default: "26.06.02"
+      release_tag:
+        description: "Release tag to create in this fork"
+        required: true
+        default: "26.06.02-portable"
+
+permissions:
+  contents: write
+
+jobs:
+  build-portable:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout upstream source
+        uses: actions/checkout@v4
+        with:
+          repository: builtbybel/FluentTweaker
+          ref: ${{ inputs.source_ref }}
+          path: source
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+          dotnet-quality: preview
+
+      - name: Configure Windows App SDK self-contained publish
+        shell: pwsh
+        run: |
+          $props = @'
+          <Project>
+            <PropertyGroup>
+              <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+              <SelfContained>true</SelfContained>
+              <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+            </PropertyGroup>
+          </Project>
+          '@
+          Set-Content -Path source/Directory.Build.props -Value $props -Encoding utf8
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore source/Winslopr/Winslopr.csproj -r win-x64
+
+      - name: Publish portable app
+        shell: pwsh
+        run: >-
+          dotnet publish source/Winslopr/Winslopr.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:WindowsAppSDKSelfContained=true
+          -p:PublishSingleFile=false
+          -p:PublishTrimmed=false
+          -o artifacts/FluentTweaker-win-x64-portable
+
+      - name: Verify Windows App SDK files are bundled
+        shell: pwsh
+        run: |
+          $publishDir = "artifacts/FluentTweaker-win-x64-portable"
+          if (!(Test-Path "$publishDir/Winslopr.exe")) {
+            throw "Published executable not found."
+          }
+          $windowsAppSdkFiles = Get-ChildItem $publishDir -Recurse | Where-Object {
+            $_.Name -like "Microsoft.WindowsAppRuntime*" -or
+            $_.Name -like "Microsoft.UI.Xaml*" -or
+            $_.FullName -match "Microsoft.WindowsAppSDK"
+          }
+          if (!$windowsAppSdkFiles) {
+            throw "Windows App SDK self-contained files were not found in publish output."
+          }
+          $windowsAppSdkFiles | Select-Object -First 20 FullName
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path artifacts/FluentTweaker-win-x64-portable/* -DestinationPath dist/FluentTweaker-win-x64-portable.zip -Force
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: FluentTweaker portable ${{ inputs.source_ref }}
+          body: |
+            Portable/self-contained build generated in this fork.
+
+            Source: builtbybel/FluentTweaker@${{ inputs.source_ref }}
+            Change: Windows App SDK self-contained publish is enabled during build.
+
+            This ZIP is intended to run without separately installing Windows App Runtime.
+          files: dist/FluentTweaker-win-x64-portable.zip
